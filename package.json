@@ -1,0 +1,33 @@
+{
+  "name": "repoboost",
+  "version": "0.1.0",
+  "description": "Zero-dependency Git repository velocity booster, bloat purifier, and ghost diff eliminator",
+  "bin": {
+    "repoboost": "./bin/repoboost.js"
+  },
+  "main": "./src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "audit": "node ./bin/repoboost.js audit",
+    "bloat": "node ./bin/repoboost.js bloat",
+    "ghost": "node ./bin/repoboost.js ghost",
+    "leak": "node ./bin/repoboost.js leak"
+  },
+  "keywords": [
+    "git",
+    "repository",
+    "performance",
+    "bloat",
+    "cleanup",
+    "crlf",
+    "developer-tools",
+    "cli",
+    "speed",
+    "gitattributes"
+  ],
+  "author": "Ilham (@IlhamXkyo)",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
