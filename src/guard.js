@@ -16,8 +16,13 @@ MAX_SIZE_LABEL="${maxSizeMb}MB"
 # Check for staged files exceeding size limit
 FAILED=0
 
-# Loop over staged files
-for FILE in $(git diff --cached --name-only --diff-filter=ACM); do
+GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo .git)"
+TMP_STAGED="$GIT_DIR/.repoboost_staged_$$"
+git diff --cached --name-only --diff-filter=ACM > "$TMP_STAGED"
+
+# Loop over staged files safely handling spaces in filenames
+while IFS= read -r FILE || [ -n "$FILE" ]; do
+  [ -z "$FILE" ] && continue
   if [ -f "$FILE" ]; then
     # Cross-platform file size in bytes
     if stat -c%s "$FILE" >/dev/null 2>&1; then
@@ -37,9 +42,15 @@ for FILE in $(git diff --cached --name-only --diff-filter=ACM); do
 
     # Check for accidental sensitive file commits
     case "$FILE" in
-      *.env|*.env.*|.env)
+      *.env.example|*.env.sample|*.env.template|*.env.dist|*.env.schema)
+        # Permitted sample configuration template
+        ;;
+      *.env|*.env.*|.env|*/.env|*/.env.*)
         echo "\\033[31m[repoboost guard] REJECTED:\\033[0m Sensitive environment file '$FILE' staged for commit!"
         FAILED=1
+        ;;
+      *.pub)
+        # Public keys are not secret
         ;;
       *.pem|*.key|*id_rsa*|*id_ed25519*)
         echo "\\033[31m[repoboost guard] REJECTED:\\033[0m Private key / certificate '$FILE' staged for commit!"
@@ -47,7 +58,8 @@ for FILE in $(git diff --cached --name-only --diff-filter=ACM); do
         ;;
     esac
   fi
-done
+done < "$TMP_STAGED"
+rm -f "$TMP_STAGED"
 
 if [ "$FAILED" -ne 0 ]; then
   echo "\\033[33mCommit aborted by repoboost guard.\\033[0m To bypass (not recommended), use: git commit --no-verify"

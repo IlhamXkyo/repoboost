@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execGit, isGitRepo, getRepoRoot } = require('./git');
+const { execGit, isGitRepo, isBareRepo, getRepoRoot } = require('./git');
 
 function detectGhostDiffs(cwd = process.cwd()) {
   if (!isGitRepo(cwd)) {
@@ -10,6 +10,20 @@ function detectGhostDiffs(cwd = process.cwd()) {
   }
 
   const root = getRepoRoot(cwd);
+
+  if (isBareRepo(cwd)) {
+    return {
+      repoRoot: root,
+      isBare: true,
+      ghostCount: 0,
+      ghostFiles: [],
+      gitattributes: {
+        exists: false,
+        configuredProperly: false,
+        path: path.join(root, '.gitattributes'),
+      },
+    };
+  }
 
   // 1. Get list of modified files
   const diffRes = execGit(['diff', '--name-only'], root);
@@ -24,17 +38,22 @@ function detectGhostDiffs(cwd = process.cwd()) {
   }
 
   const ghostFiles = [];
+  const hasHead = execGit(['rev-parse', '--verify', 'HEAD'], root).success;
+  const diffTarget = hasHead ? ['HEAD'] : [];
 
   for (const relFile of modifiedFiles) {
     // Run normal diff
-    const normalDiff = execGit(['diff', 'HEAD', '--', relFile], root);
+    const normalDiff = execGit(['diff', ...diffTarget, '--', relFile], root);
     // Run diff ignoring space and EOL
-    const eolDiff = execGit(['diff', '--ignore-space-at-eol', 'HEAD', '--', relFile], root);
+    const eolDiff = execGit(['diff', '--ignore-space-at-eol', ...diffTarget, '--', relFile], root);
 
     if (normalDiff.success && normalDiff.stdout && eolDiff.success && !eolDiff.stdout) {
       // Normal diff has lines, but eolDiff is completely empty!
       // This is a 100% ghost diff.
-      const lineCount = normalDiff.stdout.split('\n').filter(l => l.startsWith('+') || l.startsWith('-')).length;
+      const lineCount = normalDiff.stdout
+        .split('\n')
+        .filter(l => (l.startsWith('+') && !l.startsWith('+++')) || (l.startsWith('-') && !l.startsWith('---')))
+        .length;
       ghostFiles.push({
         path: relFile,
         type: 'PURE_EOL_GHOST',

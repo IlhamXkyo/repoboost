@@ -59,3 +59,31 @@ test('leak detection: catches files in .gitignore that remain tracked in git', (
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('leak detection: catches nested secret envs while permitting example templates', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '-b', 'main'], tmp);
+    execGit(['config', 'user.email', 'test@example.com'], tmp);
+    execGit(['config', 'user.name', 'Test User'], tmp);
+
+    fs.mkdirSync(path.join(tmp, 'packages', 'backend'), { recursive: true });
+    fs.writeFileSync(path.join(tmp, 'packages', 'backend', '.env'), 'DB_PASS=xyz\n');
+    fs.writeFileSync(path.join(tmp, 'packages', 'backend', '.env.local'), 'LOCAL=true\n');
+    fs.writeFileSync(path.join(tmp, '.env.example'), 'PORT=3000\n');
+    fs.writeFileSync(path.join(tmp, 'packages', 'backend', '.env.sample'), 'DB_PASS=sample\n');
+
+    execGit(['add', '.'], tmp);
+    execGit(['commit', '-m', 'add various env files'], tmp);
+
+    const res = detectLeaks(tmp);
+    const paths = res.leaks.map(l => l.path);
+
+    assert.ok(paths.includes('packages/backend/.env'), 'Nested .env should be detected as high risk');
+    assert.ok(paths.includes('packages/backend/.env.local'), 'Nested .env.local should be detected as high risk');
+    assert.equal(paths.includes('.env.example'), false, '.env.example should not be flagged as a secret leak');
+    assert.equal(paths.includes('packages/backend/.env.sample'), false, '.env.sample should not be flagged as a secret leak');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

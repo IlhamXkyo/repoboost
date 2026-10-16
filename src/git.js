@@ -28,9 +28,15 @@ function execGit(args, cwd = process.cwd(), options = {}) {
   }
 }
 
+function isBareRepo(cwd = process.cwd()) {
+  const res = execGit(['rev-parse', '--is-bare-repository'], cwd);
+  return res.success && res.stdout === 'true';
+}
+
 function isGitRepo(cwd = process.cwd()) {
   const res = execGit(['rev-parse', '--is-inside-work-tree'], cwd);
-  return res.success && res.stdout === 'true';
+  if (res.success && res.stdout === 'true') return true;
+  return isBareRepo(cwd);
 }
 
 function getRepoRoot(cwd = process.cwd()) {
@@ -100,6 +106,7 @@ function getDirectorySize(dirPath) {
 module.exports = {
   execGit,
   isGitRepo,
+  isBareRepo,
   getRepoRoot,
   getGitDir,
   getBranch,

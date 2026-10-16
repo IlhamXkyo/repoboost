@@ -62,6 +62,20 @@ test('ghost diff: detects pure CRLF vs LF line ending difference', () => {
     assert.equal(res.ghostCount, 1);
     assert.equal(res.ghostFiles[0].path, 'script.js');
     assert.equal(res.ghostFiles[0].type, 'PURE_EOL_GHOST');
+    // Exactly 4 changed diff lines (+2, -2) without falsely counting 2 header lines
+    assert.equal(res.ghostFiles[0].affectedDiffLines, 4);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('ghost diff: bare repository handling', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '--bare'], tmp);
+    const res = detectGhostDiffs(tmp);
+    assert.equal(res.isBare, true);
+    assert.equal(res.ghostCount, 0);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

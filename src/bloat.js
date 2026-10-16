@@ -15,12 +15,12 @@ function findBloat(cwd = process.cwd(), options = {}) {
   // 1. Get all objects with their associated path
   const revListRes = execGit(['rev-list', '--objects', '--all'], cwd);
   if (!revListRes.success || !revListRes.stdout) {
-    return { items: [], totalTrackedSize: 0, deadHistorySize: 0 };
+    return { items: [], totalScannedBlobs: 0, totalTrackedSize: 0, deadHistorySize: 0 };
   }
 
   const lines = revListRes.stdout.split('\n');
   const pathByHash = new Map();
-  const hashes = [];
+  const uniqueHashes = new Set();
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -28,18 +28,22 @@ function findBloat(cwd = process.cwd(), options = {}) {
     const spaceIdx = trimmed.indexOf(' ');
     if (spaceIdx === -1) {
       const hash = trimmed;
-      hashes.push(hash);
-      pathByHash.set(hash, '');
+      uniqueHashes.add(hash);
+      if (!pathByHash.has(hash)) {
+        pathByHash.set(hash, '');
+      }
     } else {
       const hash = trimmed.slice(0, spaceIdx);
       const filePath = trimmed.slice(spaceIdx + 1).trim();
-      hashes.push(hash);
-      pathByHash.set(hash, filePath);
+      uniqueHashes.add(hash);
+      if (!pathByHash.get(hash)) {
+        pathByHash.set(hash, filePath);
+      }
     }
   }
 
-  if (hashes.length === 0) {
-    return { items: [], totalTrackedSize: 0, deadHistorySize: 0 };
+  if (uniqueHashes.size === 0) {
+    return { items: [], totalScannedBlobs: 0, totalTrackedSize: 0, deadHistorySize: 0 };
   }
 
   // 2. Query object types and sizes in bulk via git cat-file
@@ -48,14 +52,14 @@ function findBloat(cwd = process.cwd(), options = {}) {
     ['cat-file', '--batch-check=%(objectname) %(objecttype) %(objectsize)'],
     {
       cwd,
-      input: hashes.join('\n'),
+      input: Array.from(uniqueHashes).join('\n'),
       encoding: 'utf8',
       maxBuffer: 64 * 1024 * 1024,
     }
   );
 
   if (catFileProcess.error || !catFileProcess.stdout) {
-    return { items: [], totalTrackedSize: 0, deadHistorySize: 0 };
+    return { items: [], totalScannedBlobs: 0, totalTrackedSize: 0, deadHistorySize: 0 };
   }
 
   // 3. Get current HEAD files to detect active vs dead history

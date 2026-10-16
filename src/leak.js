@@ -4,9 +4,9 @@ const path = require('path');
 const { execGit, isGitRepo, getRepoRoot } = require('./git');
 
 const HIGH_RISK_PATTERNS = [
-  /^\.env(\..+)?$/i,
+  /(^|\/)\.env(\.(?!example$|sample$|template$|dist$|schema$)[^/]+)?$/i,
   /\.(pem|key|p12|pfx|pkcs12)$/i,
-  /id_(rsa|dsa|ecdsa|ed25519)(\.pub)?$/i,
+  /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i,
   /(^|\/)node_modules\//i,
   /(^|\/)__pycache__\//i,
   /\.pyc$/i,
@@ -39,12 +39,13 @@ function detectLeaks(cwd = process.cwd()) {
     const files = allTrackedRes.stdout.split('\n').map(l => l.trim()).filter(Boolean);
 
     for (const file of files) {
+      const normalizedPath = file.replace(/\\/g, '/');
       const isIgnored = trackedIgnored.has(file);
       let isHighRisk = false;
       let riskReason = '';
 
       for (const pattern of HIGH_RISK_PATTERNS) {
-        if (pattern.test(file)) {
+        if (pattern.test(normalizedPath)) {
           isHighRisk = true;
           riskReason = `Matches high-risk sensitive/artifact pattern: ${pattern.toString()}`;
           break;

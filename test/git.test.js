@@ -77,3 +77,15 @@ test('git helpers: initialized repo lifecycle', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('git helpers: bare repository detection', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '--bare'], tmp);
+    assert.equal(isGitRepo(tmp), true);
+    const gitDir = getGitDir(tmp);
+    assert.ok(gitDir.length > 0);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

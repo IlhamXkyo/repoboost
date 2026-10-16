@@ -1,6 +1,6 @@
 'use strict';
 
-const { execGit, isGitRepo, getGitDir, getDirectorySize, measureCommandLatency } = require('./git');
+const { execGit, isGitRepo, isBareRepo, getGitDir, getDirectorySize, measureCommandLatency } = require('./git');
 
 function optimizeRepo(cwd = process.cwd(), options = {}) {
   if (!isGitRepo(cwd)) {
@@ -8,8 +8,10 @@ function optimizeRepo(cwd = process.cwd(), options = {}) {
   }
 
   const gitDir = getGitDir(cwd);
+  const bare = isBareRepo(cwd);
+  const latencyCmd = bare ? ['rev-parse', 'HEAD'] : ['status', '--porcelain'];
   const sizeBefore = getDirectorySize(gitDir);
-  const latencyBefore = measureCommandLatency(['status', '--porcelain'], cwd, 2);
+  const latencyBefore = measureCommandLatency(latencyCmd, cwd, 2);
 
   const dryRun = options.dryRun || false;
 
@@ -41,11 +43,12 @@ function optimizeRepo(cwd = process.cwd(), options = {}) {
   execGit(['rerere', 'gc'], cwd);
 
   const sizeAfter = getDirectorySize(gitDir);
-  const latencyAfter = measureCommandLatency(['status', '--porcelain'], cwd, 2);
+  const latencyAfter = measureCommandLatency(latencyCmd, cwd, 2);
   const bytesSaved = Math.max(0, sizeBefore - sizeAfter);
 
   return {
     dryRun: false,
+    isBare: bare,
     gitDir,
     sizeBefore,
     sizeAfter,

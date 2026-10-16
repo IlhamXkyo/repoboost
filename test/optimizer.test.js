@@ -67,3 +67,31 @@ test('optimizer: live execution packs refs and runs garbage collection', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('optimizer: bare repository optimization executes cleanly', () => {
+  const tmp = createTempDir();
+  try {
+    const normalDir = path.join(tmp, 'normal');
+    const bareDir = path.join(tmp, 'bare.git');
+    fs.mkdirSync(normalDir);
+
+    execGit(['init', '-b', 'main'], normalDir);
+    execGit(['config', 'user.email', 'test@example.com'], normalDir);
+    execGit(['config', 'user.name', 'Test User'], normalDir);
+
+    fs.writeFileSync(path.join(normalDir, 'file.txt'), 'content\n');
+    execGit(['add', '.'], normalDir);
+    execGit(['commit', '-m', 'commit'], normalDir);
+
+    execGit(['clone', '--bare', normalDir, bareDir]);
+
+    const res = optimizeRepo(bareDir);
+    assert.equal(res.error, undefined);
+    assert.equal(res.isBare, true);
+    assert.equal(res.dryRun, false);
+    assert.ok(res.sizeBefore > 0);
+    assert.ok(res.sizeAfter > 0);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

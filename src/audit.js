@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const {
   isGitRepo,
+  isBareRepo,
   getRepoRoot,
   getGitDir,
   getBranch,
@@ -58,6 +59,7 @@ function runAudit(cwd = process.cwd()) {
   }
 
   const root = getRepoRoot(cwd);
+  const bare = isBareRepo(root);
   const gitDir = getGitDir(root);
   const branch = getBranch(root);
   const commitCount = getCommitCount(root);
@@ -81,7 +83,9 @@ function runAudit(cwd = process.cwd()) {
   } catch (_) {}
 
   // Latency telemetry
-  const statusLatencyMs = measureCommandLatency(['status', '--porcelain'], root, 3);
+  const statusLatencyMs = bare
+    ? measureCommandLatency(['rev-parse', 'HEAD'], root, 3)
+    : measureCommandLatency(['status', '--porcelain'], root, 3);
   const logLatencyMs = commitCount > 0 ? measureCommandLatency(['log', '-n', '1'], root, 3) : 0;
 
   // Count objects
@@ -135,8 +139,8 @@ function runAudit(cwd = process.cwd()) {
     deductions.push(`-10 pts: Elevated git status latency (${statusLatencyMs}ms)`);
   }
 
-  // 7. Missing .gitattributes
-  if (!ghost.gitattributes.configuredProperly) {
+  // 7. Missing .gitattributes (working tree only)
+  if (!bare && !ghost.gitattributes.configuredProperly) {
     score -= 5;
     deductions.push('-5 pts: Missing or incomplete .gitattributes text normalization');
   }
@@ -145,7 +149,7 @@ function runAudit(cwd = process.cwd()) {
 
   // Actionable recommendations
   const recommendations = [];
-  if (ghost.ghostCount > 0 || !ghost.gitattributes.configuredProperly) {
+  if (!bare && (ghost.ghostCount > 0 || !ghost.gitattributes.configuredProperly)) {
     recommendations.push('Run `repoboost ghost --apply` to normalize line endings and avoid ghost diffs');
   }
   if (leaks.leakCount > 0) {
@@ -154,12 +158,13 @@ function runAudit(cwd = process.cwd()) {
   if (objStats.count > 100 || bloat.deadHistorySize > 5 * 1024 * 1024) {
     recommendations.push('Run `repoboost optimize` to pack loose objects and reclaim disk space');
   }
-  if (!guard.installed) {
+  if (!bare && !guard.installed) {
     recommendations.push('Run `repoboost guard --install` to prevent future commits of massive binaries or secrets');
   }
 
   return {
     repoRoot: root,
+    isBare: bare,
     branch,
     commitCount,
     healthScore: score,
@@ -180,7 +185,7 @@ function runAudit(cwd = process.cwd()) {
     },
     objects: objStats,
     bloatSummary: {
-      scannedBlobs: bloat.totalScannedBlobs,
+      scannedBlobs: bloat.totalScannedBlobs || 0,
       trackedBytes: bloat.totalTrackedSize,
       deadHistoryBytes: bloat.deadHistorySize,
       topBloatCount: bloat.items.length,

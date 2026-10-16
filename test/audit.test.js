@@ -72,3 +72,44 @@ test('audit: deductions trigger on detected bottlenecks', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('audit: empty 0-commit repository reports clean telemetry with 0 blobs', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '-b', 'main'], tmp);
+    const res = runAudit(tmp);
+    assert.equal(res.commitCount, 0);
+    assert.equal(res.bloatSummary.scannedBlobs, 0);
+    assert.equal(typeof res.healthScore, 'number');
+    assert.ok(res.healthScore > 0);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('audit: bare repository audit execution succeeds without error', () => {
+  const tmp = createTempDir();
+  try {
+    const normalDir = path.join(tmp, 'normal');
+    const bareDir = path.join(tmp, 'bare.git');
+    fs.mkdirSync(normalDir);
+
+    execGit(['init', '-b', 'main'], normalDir);
+    execGit(['config', 'user.email', 'test@example.com'], normalDir);
+    execGit(['config', 'user.name', 'Test User'], normalDir);
+
+    fs.writeFileSync(path.join(normalDir, 'hello.txt'), 'hello world\n');
+    execGit(['add', '.'], normalDir);
+    execGit(['commit', '-m', 'initial commit'], normalDir);
+
+    execGit(['clone', '--bare', normalDir, bareDir]);
+
+    const res = runAudit(bareDir);
+    assert.equal(res.error, undefined);
+    assert.equal(res.isBare, true);
+    assert.equal(res.commitCount, 1);
+    assert.ok(res.healthScore > 0);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});

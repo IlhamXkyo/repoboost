@@ -78,3 +78,45 @@ test('bloat detection: catches active and dead history blobs', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+test('bloat detection: empty 0-commit repository returns 0 scannedBlobs', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '-b', 'main'], tmp);
+    const res = findBloat(tmp);
+    assert.equal(res.totalScannedBlobs, 0);
+    assert.equal(res.totalTrackedSize, 0);
+    assert.equal(res.deadHistorySize, 0);
+    assert.deepEqual(res.items, []);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('bloat detection: functions accurately on bare repositories', () => {
+  const tmp = createTempDir();
+  try {
+    const normalDir = path.join(tmp, 'normal');
+    const bareDir = path.join(tmp, 'bare.git');
+    fs.mkdirSync(normalDir);
+
+    execGit(['init', '-b', 'main'], normalDir);
+    execGit(['config', 'user.email', 'test@example.com'], normalDir);
+    execGit(['config', 'user.name', 'Test User'], normalDir);
+
+    fs.writeFileSync(path.join(normalDir, 'data.bin'), Buffer.alloc(50 * 1024, 0x5a));
+    execGit(['add', '.'], normalDir);
+    execGit(['commit', '-m', 'add data.bin'], normalDir);
+
+    execGit(['clone', '--bare', normalDir, bareDir]);
+
+    const res = findBloat(bareDir);
+    assert.equal(res.error, undefined);
+    assert.ok(res.totalScannedBlobs >= 1);
+    assert.ok(res.items.length >= 1);
+    assert.equal(res.items[0].inHead, true);
+    assert.ok(res.items[0].size >= 50000);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
