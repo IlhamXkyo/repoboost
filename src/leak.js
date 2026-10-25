@@ -7,6 +7,13 @@ const HIGH_RISK_PATTERNS = [
   /(^|\/)\.env(\.(?!example$|sample$|template$|dist$|schema$)[^/]+)?$/i,
   /\.(pem|key|p12|pfx|pkcs12)$/i,
   /(^|\/)id_(rsa|dsa|ecdsa|ed25519)$/i,
+  /(^|\/)serviceAccountKey.*\.json$/i,
+  /(^|\/)credentials\.json$/i,
+  /(^|\/)\.npmrc$/i,
+  /(^|\/)\.yarnrc(\.yml)?$/i,
+  /(^|\/)npm-debug\.log.*$/i,
+  /(^|\/)yarn-error\.log.*$/i,
+  /(^|\/)pnpm-debug\.log.*$/i,
   /(^|\/)node_modules\//i,
   /(^|\/)__pycache__\//i,
   /\.pyc$/i,
@@ -14,6 +21,10 @@ const HIGH_RISK_PATTERNS = [
   /Thumbs\.db$/i,
   /\.sqlite3?$/i,
   /\.log$/i,
+  /(^|\/)\.terraform\//i,
+  /(^|\/)\.coverage(\..+)?$/i,
+  /(^|\/)coverage\//i,
+  /(^|\/)\.pytest_cache\//i,
 ];
 
 function detectLeaks(cwd = process.cwd()) {
@@ -71,7 +82,37 @@ function detectLeaks(cwd = process.cwd()) {
   };
 }
 
+function fixLeaks(cwd = process.cwd(), options = {}) {
+  const leaksResult = detectLeaks(cwd);
+  if (leaksResult.error) {
+    return { error: leaksResult.error, fixedCount: 0, removedFiles: [] };
+  }
+
+  const root = leaksResult.repoRoot;
+  const removedFiles = [];
+  const errors = [];
+
+  for (const leak of leaksResult.leaks) {
+    const res = execGit(['rm', '--cached', '--', leak.path], root);
+    if (res.success) {
+      removedFiles.push(leak.path);
+    } else {
+      errors.push({ path: leak.path, error: res.stderr || 'Failed to unstage' });
+    }
+  }
+
+  return {
+    repoRoot: root,
+    totalLeaks: leaksResult.leakCount,
+    fixedCount: removedFiles.length,
+    removedFiles,
+    errors,
+    success: errors.length === 0,
+  };
+}
+
 module.exports = {
   detectLeaks,
+  fixLeaks,
   HIGH_RISK_PATTERNS,
 };

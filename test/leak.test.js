@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { execGit } = require('../src/git');
-const { detectLeaks } = require('../src/leak');
+const { detectLeaks, fixLeaks } = require('../src/leak');
 
 function createTempDir(prefix = 'repoboost-test-leak-') {
   return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
@@ -83,6 +83,46 @@ test('leak detection: catches nested secret envs while permitting example templa
     assert.ok(paths.includes('packages/backend/.env.local'), 'Nested .env.local should be detected as high risk');
     assert.equal(paths.includes('.env.example'), false, '.env.example should not be flagged as a secret leak');
     assert.equal(paths.includes('packages/backend/.env.sample'), false, '.env.sample should not be flagged as a secret leak');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('leak remediation: fixLeaks untracks leaked files while preserving on disk', () => {
+  const tmp = createTempDir();
+  try {
+    execGit(['init', '-b', 'main'], tmp);
+    execGit(['config', 'user.email', 'test@example.com'], tmp);
+    execGit(['config', 'user.name', 'Test User'], tmp);
+
+    fs.writeFileSync(path.join(tmp, '.env'), 'SECRET=foo\n');
+    fs.writeFileSync(path.join(tmp, 'credentials.json'), '{"key":"secret"}\n');
+    fs.writeFileSync(path.join(tmp, 'app.js'), 'console.log("ok");\n');
+    execGit(['add', '.'], tmp);
+    execGit(['commit', '-m', 'commit files'], tmp);
+
+    const initialLeaks = detectLeaks(tmp);
+    assert.equal(initialLeaks.leakCount, 2);
+
+    const fixResult = fixLeaks(tmp);
+    assert.equal(fixResult.success, true);
+    assert.equal(fixResult.fixedCount, 2);
+    assert.ok(fixResult.removedFiles.includes('.env'));
+    assert.ok(fixResult.removedFiles.includes('credentials.json'));
+
+    // Check files are still present on disk
+    assert.ok(fs.existsSync(path.join(tmp, '.env')), '.env must remain on disk');
+    assert.ok(fs.existsSync(path.join(tmp, 'credentials.json')), 'credentials.json must remain on disk');
+
+    // Check files are now untracked in git status
+    const statusRes = execGit(['status', '--porcelain'], tmp);
+    assert.ok(statusRes.stdout.includes('D  .env'));
+    assert.ok(statusRes.stdout.includes('D  credentials.json'));
+
+    // After committing the unstaging, leaks should be 0
+    execGit(['commit', '-m', 'chore: fix leaks'], tmp);
+    const afterLeaks = detectLeaks(tmp);
+    assert.equal(afterLeaks.leakCount, 0);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

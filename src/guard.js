@@ -18,11 +18,13 @@ FAILED=0
 
 GIT_DIR="$(git rev-parse --git-dir 2>/dev/null || echo .git)"
 TMP_STAGED="$GIT_DIR/.repoboost_staged_$$"
-git diff --cached --name-only --diff-filter=ACM > "$TMP_STAGED"
+git -c core.quotepath=false diff --cached --name-only --diff-filter=ACM > "$TMP_STAGED"
 
 # Loop over staged files safely handling spaces in filenames
 while IFS= read -r FILE || [ -n "$FILE" ]; do
   [ -z "$FILE" ] && continue
+  FILE="\${FILE#\\\"}"
+  FILE="\${FILE%\\\"}"
   if [ -f "$FILE" ]; then
     # Cross-platform file size in bytes
     if stat -c%s "$FILE" >/dev/null 2>&1; then
@@ -52,8 +54,8 @@ while IFS= read -r FILE || [ -n "$FILE" ]; do
       *.pub)
         # Public keys are not secret
         ;;
-      *.pem|*.key|*id_rsa*|*id_ed25519*)
-        echo "\\033[31m[repoboost guard] REJECTED:\\033[0m Private key / certificate '$FILE' staged for commit!"
+      *.pem|*.key|*.pfx|*.p12|*id_rsa*|*id_ed25519*|*serviceAccountKey*.json|*credentials.json)
+        echo "\\033[31m[repoboost guard] REJECTED:\\033[0m Private key / secret artifact '$FILE' staged for commit!"
         FAILED=1
         ;;
     esac

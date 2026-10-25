@@ -4,7 +4,7 @@ const git = require('./git');
 const { runAudit } = require('./audit');
 const { findBloat } = require('./bloat');
 const { detectGhostDiffs, generateGitattributes, applyGitattributes } = require('./ghost');
-const { detectLeaks } = require('./leak');
+const { detectLeaks, fixLeaks } = require('./leak');
 const { optimizeRepo } = require('./optimizer');
 const { installGuard, uninstallGuard, checkGuardStatus } = require('./guard');
 const formatter = require('./formatter');
@@ -17,6 +17,7 @@ module.exports = {
   generateGitattributes,
   applyGitattributes,
   detectLeaks,
+  fixLeaks,
   optimizeRepo,
   installGuard,
   uninstallGuard,

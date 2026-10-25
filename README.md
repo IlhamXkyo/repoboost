@@ -57,11 +57,12 @@ npm install -g repoboost
    - Pinpoints files flagged as dirty solely due to CRLF vs LF line ending discrepancies.
    - Detects missing `.gitattributes` normalization.
    - Generates and applies recommended `.gitattributes` with `repoboost ghost --apply`.
+   - Renormalizes working tree index immediately with `--renormalize`.
 
 4. **Tracked Ignore & Secret Leaks (`repoboost leak`)**
    - Catches files that match `.gitignore` rules but remain actively tracked in Git index.
-   - Flags sensitive credential leaks (`.env`, `.pem`, `id_rsa`, `node_modules`).
-   - Emits exact one-line remediation commands (`git rm --cached "<file>"`).
+   - Flags sensitive credential leaks (`.env`, `.pem`, `id_rsa`, `serviceAccountKey*.json`, `node_modules`).
+   - One-step automatic remediation via `repoboost leak --fix` to untrack files while preserving them on disk.
 
 5. **Safe Non-Destructive Optimization (`repoboost optimize`)**
    - Executes safe reference packing (`git pack-refs --all --prune`), automated garbage collection, and loose object pruning.
@@ -73,8 +74,10 @@ npm install -g repoboost
    - Intercepts files exceeding the size threshold (default: 5MB) or private keys BEFORE they enter Git history.
    - Prevents repository pollution at the source.
 
-7. **Agent & Pipeline Friendly (`--json`)**
-   - Every command supports structured JSON output for AI coding agents and CI/CD automation.
+7. **CI/CD Quality Gate & AI Automation (`--fail-under`, `--strict`, `--json`)**
+   - Enforce minimum repository health standards in CI pipelines with `--fail-under <score>`.
+   - Block builds on dirty line endings or sensitive leaks with `--strict`.
+   - Every command supports structured JSON output for AI coding agents and CI/CD pipelines.
 
 ---
 
@@ -95,9 +98,13 @@ COMMANDS:
 
 OPTIONS:
   --json               Output machine-readable JSON (ideal for CI/CD & AI agents)
+  --fail-under <N>     Exit with code 1 if health score is under N in 'audit' (CI gate)
+  --strict             Fail audit if any leaks or ghost diffs are detected
   --top <N>            Number of largest blobs to return (default: 15)
   --threshold <MB>     Minimum blob size in MB for bloat scan (default: 0)
   --apply              Apply recommended .gitattributes normalization in 'ghost'
+  --renormalize        Renormalize working tree index line endings when applying ghost fix
+  --fix                Automatically untrack leaked/ignored files in 'leak'
   --dry-run            Simulate optimization without making disk modifications
   --install            Install pre-commit hook in 'guard'
   --uninstall          Uninstall pre-commit hook in 'guard'
@@ -162,8 +169,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Run repoboost audit
-        run: npx repoboost audit --json
+      - name: Run repoboost audit with Quality Gate
+        run: npx repoboost audit --fail-under 80 --strict --json
 ```
 
 ---
@@ -173,7 +180,7 @@ jobs:
 `repoboost` is engineered strictly according to `anti-slop-code` principles:
 - **Zero Runtime Dependencies**: Uses Node.js standard modules (`child_process`, `fs`, `path`, `os`, `util`).
 - **Zero Mocks in Core Flow**: Interacts directly with native Git plumbing (`git rev-list`, `git cat-file`, `git count-objects`, `git ls-files`).
-- **Deterministic Test Suite**: 22 unit and integration tests executing real Git repositories in temporary sandboxes.
+- **Deterministic Test Suite**: 32 unit and integration tests executing real Git repositories in temporary sandboxes.
 
 ```bash
 npm test

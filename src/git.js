@@ -58,6 +58,8 @@ function getGitDir(cwd = process.cwd()) {
 function getBranch(cwd = process.cwd()) {
   const res = execGit(['branch', '--show-current'], cwd);
   if (res.success && res.stdout) return res.stdout;
+  const symRes = execGit(['symbolic-ref', '--short', 'HEAD'], cwd);
+  if (symRes.success && symRes.stdout) return symRes.stdout;
   const headRes = execGit(['rev-parse', '--short', 'HEAD'], cwd);
   return headRes.success ? `detached@${headRes.stdout}` : 'empty';
 }

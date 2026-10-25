@@ -119,21 +119,42 @@ function generateGitattributes() {
 `;
 }
 
-function applyGitattributes(cwd = process.cwd()) {
+function applyGitattributes(cwd = process.cwd(), options = {}) {
   const root = getRepoRoot(cwd);
   const gitattributesPath = path.join(root, '.gitattributes');
+  let resultMsg = '';
 
   if (fs.existsSync(gitattributesPath)) {
     const existing = fs.readFileSync(gitattributesPath, 'utf8');
     if (/^\s*\*\s+text(=auto)?/m.test(existing)) {
-      return { success: false, message: '.gitattributes already contains text=auto configuration' };
+      resultMsg = '.gitattributes already contains text=auto configuration';
+      if (options.renormalize) {
+        const renormRes = execGit(['add', '--renormalize', '.'], root);
+        return {
+          success: true,
+          message: `${resultMsg}. Renormalized working tree line endings.`,
+          renormalized: renormRes.success,
+        };
+      }
+      return { success: false, message: resultMsg, renormalized: false };
     }
     fs.appendFileSync(gitattributesPath, '\n# Added by repoboost\n* text=auto eol=lf\n');
-    return { success: true, message: 'Updated existing .gitattributes with * text=auto eol=lf' };
+    resultMsg = 'Updated existing .gitattributes with * text=auto eol=lf';
+  } else {
+    fs.writeFileSync(gitattributesPath, generateGitattributes(), 'utf8');
+    resultMsg = 'Created recommended .gitattributes with normalized line endings';
   }
 
-  fs.writeFileSync(gitattributesPath, generateGitattributes(), 'utf8');
-  return { success: true, message: 'Created recommended .gitattributes with normalized line endings' };
+  let renormalized = false;
+  if (options.renormalize) {
+    const renormRes = execGit(['add', '--renormalize', '.'], root);
+    renormalized = renormRes.success;
+    if (renormalized) {
+      resultMsg += ' and renormalized working tree index';
+    }
+  }
+
+  return { success: true, message: resultMsg, renormalized };
 }
 
 module.exports = {

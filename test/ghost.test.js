@@ -103,6 +103,11 @@ test('gitattributes: generates and applies text=auto', () => {
     // Second apply should report already configured
     const reapplyRes = applyGitattributes(tmp);
     assert.equal(reapplyRes.success, false);
+
+    // Apply with renormalize should execute successfully
+    const renormRes = applyGitattributes(tmp, { renormalize: true });
+    assert.equal(renormRes.success, true);
+    assert.equal(renormRes.renormalized, true);
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

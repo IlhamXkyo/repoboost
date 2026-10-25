@@ -29,7 +29,7 @@ test('cli: --help and --version', () => {
 
   const verRes = runCli(['--version'], process.cwd());
   assert.equal(verRes.status, 0);
-  assert.ok(verRes.stdout.includes('repoboost v0.1.0'));
+  assert.ok(verRes.stdout.includes('repoboost v0.2.0'));
 });
 
 test('cli: error on non-git directory', () => {
@@ -114,6 +114,26 @@ test('cli: full suite of commands on initialized git repo', () => {
     assert.equal(guardUninstallRes.status, 0);
     const guardUninstallData = JSON.parse(guardUninstallRes.stdout);
     assert.equal(guardUninstallData.success, true);
+
+    // 8. CI Quality Gate: --fail-under passing
+    const passGateRes = runCli(['audit', tmp, '--fail-under', '50'], tmp);
+    assert.equal(passGateRes.status, 0);
+
+    // 9. CI Quality Gate: --fail-under failing
+    const failGateRes = runCli(['audit', tmp, '--fail-under', '101'], tmp);
+    assert.equal(failGateRes.status, 1);
+    assert.ok(failGateRes.stderr.includes('[Quality Gate Failed]'));
+
+    // 10. Leak remediation via CLI: leak --fix
+    fs.writeFileSync(path.join(tmp, '.env'), 'SECRET=val\n');
+    execGit(['add', '.env'], tmp);
+    execGit(['commit', '-m', 'add secret'], tmp);
+
+    const leakFixJson = runCli(['leak', tmp, '--fix', '--json'], tmp);
+    assert.equal(leakFixJson.status, 0);
+    const leakFixData = JSON.parse(leakFixJson.stdout);
+    assert.equal(leakFixData.fixedCount, 1);
+    assert.ok(leakFixData.removedFiles.includes('.env'));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
